@@ -1,0 +1,216 @@
+import kivy
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.uix.button import Button
+from kivy.uix.textinput import TextInput
+import pyttsx3
+import speech_recognition as sr
+import datetime
+import webbrowser as wb
+import os
+import random
+import pyautogui
+import requests
+import cv2
+import pyjokes
+from newsapi import NewsApiClient
+
+kivy.require('1.11.1')
+
+class VoiceAssistantApp(App):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.engine = pyttsx3.init()
+        self.recognizer = sr.Recognizer()
+        self.input_text = TextInput(hint_text="Speak or enter command here", keyboard_mode='auto')
+        self.execute_button = Button(text="Execute Command", on_press=self.process_command)
+        self.output_label = Label(text="Output will appear here")
+        self.weather_api_key = '2c46c60f2b26cef4458ccaa2a6c6a316t'
+        self.wikipedia_base_url = 'https://en.wikipedia.org/wiki/'
+        self.news_api_key = 'a9427b429c364c41a74d01fac211d4fd'
+        self.newsapi = NewsApiClient(api_key=self.news_api_key)
+
+    def build(self):
+        layout = BoxLayout(orientation='vertical')
+        layout.add_widget(self.input_text)
+        layout.add_widget(self.execute_button)
+        layout.add_widget(self.output_label)
+        return layout
+
+    def speak(self, audio):
+        self.engine.say(audio)
+        self.engine.runAndWait()
+
+    def recognize_speech(self):
+        with sr.Microphone() as source:
+            self.recognizer.adjust_for_ambient_noise(source)
+            audio = self.recognizer.listen(source)
+
+        try:
+            recognized_text = self.recognizer.recognize_google(audio)
+            self.input_text.text = recognized_text.lower()
+        except sr.UnknownValueError:
+            self.speak("Sorry, I didn't catch that. Could you repeat?")
+            return None
+        except sr.RequestError as e:
+            self.speak(f"Error accessing Google Speech Recognition service: {e}")
+            return None
+
+        return recognized_text.lower()
+
+    def process_command(self, instance):
+        command = self.input_text.text.lower()
+        if not command:  # If input is empty, use voice recognition
+            recognized_text = self.recognize_speech()
+            if recognized_text:
+                self.output_label.text = self.execute_command(recognized_text)
+        else:
+            self.output_label.text = self.execute_command(command)
+
+    def execute_command(self, command):
+        if "time" in command:
+            return self.get_time()
+        elif "date" in command:
+            return self.get_date()
+        elif "weather" in command:
+            return self.get_weather_info()
+        elif "search youtube for" in command:
+            search_query = command.replace("search youtube for", "")
+            return self.search_youtube(search_query)
+        elif "search google for" in command:
+            search_query = command.replace("search google for", "")
+            return self.search_google(search_query)
+        elif "search wikipedia for" in command:
+            search_query = command.replace("search wikipedia for", "")
+            return self.search_wikipedia(search_query)
+        elif "search spotify for" in command:
+            search_query = command.replace("search spotify for", "")
+            return self.search_spotify(search_query)
+        elif "play music on spotify" in command:
+            return self.play_music_spotify()
+        elif "tell a joke" in command:
+            return self.tell_joke()
+        elif "news" in command:
+            return self.get_news()
+        elif "take a picture" in command:
+            self.take_picture()
+            return "Taking a picture..."
+        elif "take a screenshot" in command:
+            self.take_screenshot()
+            return "Taking a screenshot..."
+        elif "record a video" in command:
+            self.record_video()
+            return "Recording a video..."
+
+    def get_time(self):
+        current_time = datetime.datetime.now().strftime("%I:%M %p")
+        self.speak("The current time is " + current_time)
+        return "The current time is " + current_time
+
+    def get_date(self):
+        current_date = datetime.datetime.now().strftime("%A, %d %B %Y")
+        self.speak("The current date is " + current_date)
+        return "The current date is " + current_date
+
+    def get_weather_info(self):
+        try:
+            city = "Nairobi"
+            url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={self.weather_api_key}"
+            response = requests.get(url)
+            data = response.json()
+
+            if response.status_code == 200:
+                weather_description = data['weather'][0]['description']
+                temperature = data['main']['temp']
+                humidity = data['main']['humidity']
+                city_name = data['name']
+
+                weather_info = f"Weather in {city_name}: {weather_description}. Temperature: {temperature}°C. Humidity: {humidity}%."
+                self.speak(weather_info)
+                return weather_info
+            else:
+                self.speak("Failed to fetch weather information.")
+                return "Failed to fetch weather information."
+        except Exception as e:
+            self.speak("Error fetching weather information.")
+            return "Error fetching weather information."
+
+    def search_youtube(self, query):
+        wb.open(f"https://www.youtube.com/results?search_query={query}")
+        return f"Searching YouTube for {query}..."
+
+    def search_google(self, query):
+        wb.open(f"https://www.google.com/search?q={query}")
+        return f"Searching Google for {query}..."
+
+    def search_wikipedia(self, query):
+        wb.open(f"{self.wikipedia_base_url}{query.replace(' ', '_')}")
+        return f"Searching Wikipedia for {query}..."
+
+    def search_spotify(self, query):
+        wb.open(f"https://open.spotify.com/search/{query}")
+        return f"Searching Spotify for {query}..."
+
+    def play_music_spotify(self):
+        wb.open("https://open.spotify.com/")
+        return "Playing music on Spotify..."
+
+    def tell_joke(self):
+        joke = pyjokes.get_joke()
+        self.speak(joke)
+        return joke
+
+    def get_news(self):
+        try:
+            top_headlines = self.newsapi.get_top_headlines(language='en', country='us')
+            articles = top_headlines['articles']
+
+            news_headlines = []
+            for article in articles[:3]:
+                news_headlines.append(article['title'])
+                self.speak(article['title'])
+
+            return "\n".join(news_headlines)
+        except Exception as e:
+            self.speak("Error fetching news.")
+            return "Error fetching news."
+
+    def take_picture(self):
+        # Open a connection to the camera (0 is the default camera)
+        cap = cv2.VideoCapture(0)
+
+        # Check if the camera is opened successfully
+        if not cap.isOpened():
+            self.speak("Error: Could not open camera.")
+            return
+
+        # Capture a single frame
+        ret, frame = cap.read()
+
+        # Save the frame as an image
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        picture_path = f"picture_{timestamp}.png"
+        cv2.imwrite(picture_path, frame)
+
+        # Release the camera
+        cap.release()
+
+        self.speak("I've taken a picture. It's saved as " + picture_path)
+        return "Picture saved as " + picture_path
+
+    def take_screenshot(self):
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        screenshot_path = f"screenshot_{timestamp}.png"
+        pyautogui.screenshot(screenshot_path)
+        self.speak("I've taken a screenshot. It's saved as " + screenshot_path)
+        return "Screenshot saved as " + screenshot_path
+
+    def record_video(self):
+        # Placeholder function for recording a video
+        self.speak("Recording a video is not implemented in this demo.")
+        return "Recording a video is not implemented in this demo."
+
+
+if __name__ == "__main__":
+    VoiceAssistantApp().run()
