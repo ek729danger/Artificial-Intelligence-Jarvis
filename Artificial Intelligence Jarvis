@@ -26,9 +26,9 @@ class VoiceAssistantApp(App):
         self.input_text = TextInput(hint_text="Speak or enter command here", keyboard_mode='auto')
         self.execute_button = Button(text="Execute Command", on_press=self.process_command)
         self.output_label = Label(text="Output will appear here")
-        self.weather_api_key = '2c46c60f2b26cef4458ccaa2a6c6a316t'
+        self.weather_api_key = 'Your weather API key'
         self.wikipedia_base_url = 'https://en.wikipedia.org/wiki/'
-        self.news_api_key = 'a9427b429c364c41a74d01fac211d4fd'
+        self.news_api_key = 'Your News API key'
         self.newsapi = NewsApiClient(api_key=self.news_api_key)
 
     def build(self):
